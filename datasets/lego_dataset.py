@@ -116,7 +116,7 @@ def build_mcq_question_text(row: pd.Series) -> str:
 
 
 def is_text_only_choice_question(row: pd.Series) -> bool:
-    """Keep only MCQ / true-false questions that do not depend on image outputs."""
+    """Keep only MCQ / true-false questions."""
     question_type = str(row.get("question_type", "mcq")).strip().lower()
     if question_type not in SUPPORTED_TEXT_QUESTION_TYPES:
         return False
@@ -125,13 +125,7 @@ def is_text_only_choice_question(row: pd.Series) -> bool:
     if "generation" in category:
         return False
 
-    question_bits = [str(row.get("question", "")), str(row.get("hint", ""))]
-    for letter in string.ascii_uppercase:
-        if letter in row.index and pd.notna(row[letter]):
-            question_bits.append(str(row[letter]))
-    combined = " ".join(question_bits).lower()
-
-    return not any(marker in combined for marker in IMAGE_OUTPUT_MARKERS)
+    return True
 
 
 def convert_lego_to_benchmark_questions(
