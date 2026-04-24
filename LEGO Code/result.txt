@@ -1,0 +1,211 @@
+LEGO-Puzzles / VLMEvalKit – Run & Debug Summary
+==============================================
+
+Environment
+-----------
+- OS: macOS (Darwin 24.5.0)
+- Python: miniconda, Python 3.10 (under /Users/waleed/miniconda3)
+- Project root: /Users/waleed/CSE 199/LEGO-Puzzles
+- Main entry: run.py
+- Target dataset: LEGO (used via --data LEGO)
+
+------------------------------------------------------------
+1. Initial runs: missing packages and NumPy warning
+------------------------------------------------------------
+
+Symptoms:
+- Warning: a module compiled against NumPy 1.x is running with NumPy 2.2.6.
+- Crash 1:
+  ModuleNotFoundError: No module named 'rich'
+- Crash 2:
+  ModuleNotFoundError: No module named 'portalocker'
+
+Causes:
+- Some compiled dependencies built for NumPy 1.x, environment had NumPy 2.x.
+- Required Python packages 'rich' and 'portalocker' not installed.
+
+Fixes:
+- Install missing packages:
+  python -m pip install rich
+  python -m pip install portalocker
+
+- (Optional) Align NumPy with ecosystem:
+  python -m pip install "numpy<2"
+
+------------------------------------------------------------
+2. PyTorch version and “PyTorch not found” messages
+------------------------------------------------------------
+
+Symptoms:
+- Log: Disabling PyTorch because PyTorch >= 2.4 is required but found 2.0.1
+- Later: IdeficsForVisionText2Text requires the PyTorch library but it was not found in your environment.
+
+Cause:
+- Installed torch==2.0.1, but parts of the stack require torch >= 2.4.
+- Code treats “too old” as effectively “not found”.
+
+Planned fix:
+- Upgrade PyTorch stack (details depend on Mac/CPU/MPS setup):
+  python -m pip install --upgrade torch torchvision torchaudio
+  (or use the official install instructions from https://pytorch.org/get-started/locally/)
+
+------------------------------------------------------------
+3. .env file location and OPENAI_API_KEY
+------------------------------------------------------------
+
+Symptoms:
+- Log from misc.py: Did not detect the .env file at /Users/waleed/CSE 199/LEGO-Puzzles/.env, failed to load.
+- Later, when using an OpenAI API model:
+  AssertionError: Illegal openai_key . Please set the environment variable OPENAI_API_KEY to your openai key.
+
+Causes:
+1) .env was initially at /Users/waleed/CSE 199/.env, but VLMEvalKit expects:
+   /Users/waleed/CSE 199/LEGO-Puzzles/.env
+
+2) OPENAI_API_KEY inside .env was missing or did not start with "sk-".
+
+Required fix:
+- Ensure this file exists:
+  /Users/waleed/CSE 199/LEGO-Puzzles/.env
+
+- And contains a valid OpenAI key (example, do NOT commit this):
+  OPENAI_API_KEY=sk-<your-real-openai-key>
+
+- Run from project root so load_env() sees .env:
+  cd "/Users/waleed/CSE 199/LEGO-Puzzles"
+  python run.py ...
+
+Sanity check:
+- From project root:
+  python -c "import os; print(os.getenv('OPENAI_API_KEY','')[:3])"
+  Expected output: sk-
+
+------------------------------------------------------------
+4. Attempting large local model: idefics_80b_instruct
+------------------------------------------------------------
+
+Model:
+- idefics_80b_instruct, mapped in vlmeval/config.py to HuggingFaceM4/idefics-80b-instruct.
+
+Symptom:
+- OSError: Can't load the configuration of 'HuggingFaceM4/idefics-80b-instruct'...
+
+Possible causes:
+- Need internet access to https://huggingface.co/HuggingFaceM4/idefics-80b-instruct
+- Model may be gated (requires Hugging Face login and license acceptance).
+- Offline mode or local path collision.
+
+Additional requirement (when using device_map):
+- accelerate must be installed:
+  python -m pip install accelerate
+
+Conclusion:
+- Given 80B size and Mac hardware (no CUDA), this model is not practical locally.
+
+------------------------------------------------------------
+5. Trying smaller local models (SmolVLM etc.)
+------------------------------------------------------------
+
+Smaller models checked in vlmeval/config.py:
+- SmolVLM-256M, SmolVLM-500M, SmolVLM
+- Other small/based models like InternVL2-1B, Janus-Pro-1B, deepseek_vl2_tiny, etc.
+
+Two main issues occurred while trying SmolVLM:
+
+5.1 filelock / huggingface_hub error
+------------------------------------
+
+Symptom:
+- TypeError: BaseFileLock.__init__() got an unexpected keyword argument 'mode'
+
+Stack:
+- huggingface_hub/utils/_fixes.WeakFileLock -> FileLock(lock_file, timeout=..., mode=0o664)
+
+Cause:
+- huggingface_hub expected a newer filelock that supports a 'mode' parameter.
+- filelock was older/incompatible.
+
+Fix:
+- Upgrade:
+  python -m pip install -U filelock huggingface_hub
+  python -m pip install -U transformers
+
+5.2 CUDA-only SmolVLM wrapper on a non-CUDA Mac
+-----------------------------------------------
+
+Symptom:
+- AssertionError: Torch not compiled with CUDA enabled
+
+Cause:
+- In vlmeval/vlm/smolvlm.py, SmolVLM.__init__ uses:
+  Idefics3ForConditionalGeneration.from_pretrained(..., device_map="cuda")
+- On this Mac, PyTorch has CPU/MPS but no CUDA.
+- Any attempt to use torch.cuda.* fails.
+
+Conclusion:
+- The SmolVLM wrapper as written is GPU (CUDA) only and cannot run on this Mac without modifying the code to use CPU/MPS.
+
+------------------------------------------------------------
+6. Switching to API-based models (recommended on this machine)
+------------------------------------------------------------
+
+Motivation:
+- Local CUDA not available, large local models are impractical, some wrappers are CUDA-only.
+- API models avoid GPU issues and use service backends.
+
+API models in vlmeval/config.py:
+- In api_models dict, including:
+  - GPT4o_MINI
+  - GPT4o
+  - ChatGPT4o
+  - GPT4.5
+  - Various Gemini, Claude, and other vendor APIs.
+- Also, o1_apis for o1-2024-12-17 etc.
+
+Requirements for OpenAI API:
+- Valid OPENAI_API_KEY in /Users/waleed/CSE 199/LEGO-Puzzles/.env, starting with sk-.
+- Internet access.
+
+Example of how to run with an API model:
+- From project root:
+
+  cd "/Users/waleed/CSE 199/LEGO-Puzzles"
+
+  python run.py \
+    --data LEGO \
+    --model GPT4o_MINI \
+    --mode all \
+    --api-nproc 1 \
+    --verbose
+
+Explanation:
+- --data LEGO: run on the LEGO dataset.
+- --model GPT4o_MINI: uses the GPT4o_MINI wrapper defined in vlmeval/config.py.
+- --mode all: inference + evaluation.
+- --api-nproc 1: single-threaded API calls (safe start; can increase later).
+- --verbose: more logging.
+
+Outputs:
+- Prediction and result files appear under:
+  ./outputs/<MODEL_NAME>/<EVAL_ID>/
+- Symlinks to current results are under:
+  ./outputs/<MODEL_NAME>/
+
+------------------------------------------------------------
+7. Final key points and lessons
+------------------------------------------------------------
+
+- Environment consistency is crucial:
+  - PyTorch, NumPy, transformers, huggingface_hub, and filelock must be compatible.
+- On a Mac without CUDA:
+  - CUDA-only wrappers such as SmolVLM with device_map="cuda" will fail.
+  - Either use:
+    - (a) API-based models, or
+    - (b) edit model wrappers to use CPU/MPS.
+- .env configuration:
+  - Must be in the project root: /Users/waleed/CSE 199/LEGO-Puzzles/.env
+  - Must include valid keys, particularly:
+    OPENAI_API_KEY=sk-<your-real-key>
+- Practical, working path:
+  - Use GPT4o_MINI (or another API model) via run.py
+  - Keep .env and Python deps consistent.

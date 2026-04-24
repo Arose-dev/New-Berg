@@ -1,0 +1,179 @@
+================================================================================
+LEGO Benchmark EVALUATION - SIMPLE EXPLANATION (INPUTS, OUTPUTS, HOW IT WORKS)
+================================================================================
+
+WHAT IS THIS?
+-------------
+LEGO Benchmark answers questions about images (e.g. "Is there a red cube?"). It does this
+by (1) inventing small tools (API methods), (2) writing a short program that uses
+those tools to answer each question, and (3) running that program on the image
+using vision models (SAM2, Molmo, etc.). At the end it compares its answers to
+the correct answers and reports accuracy.
+
+
+INPUTS (WHAT YOU GIVE THE SCRIPT)
+---------------------------------
+1. annotations.json
+   - A list of questions. Each question has: which image, the question text,
+     the correct answer, and the type of answer (yes/no, number, word, etc.).
+   - Example: "For image 0.png, question: Is there a red cube? Answer: yes."
+
+2. images folder
+   - The actual image files (e.g. 0.png, 1.png). Each question points to one
+     image by filename.
+
+3. api.key
+   - A file containing your OpenAI API key. Used to call GPT (for generating
+     method signatures, API code, and solution programs). One line, no quotes.
+
+4. models folder (optional path, default: models/)
+   - Pre-downloaded vision models: SAM2 (segmentation), UniDepth (depth),
+     GroundingDINO or Molmo (visual QA). The script loads these to "see" the
+     image when running the programs.
+
+5. Command-line options
+   - --dataset clevr (or gqa, omni3d): which style of questions/prompts.
+   - --num-questions N: how many questions to run (-1 = all).
+   - --num-api-questions N: how many questions to use when designing the API.
+
+
+THE PROCESS (4 BIG STEPS)
+-------------------------
+
+STEP 1: GENERATE SIGNATURES
+   What: Figure out what "tools" (methods) are needed to answer the questions.
+   How:  GPT looks at a sample of questions and images, and proposes method
+         names and descriptions (e.g. "get color at x,y", "find objects").
+   Output: signatures.json + HTML per question in results/.../signature_generator/
+
+STEP 2: IMPLEMENT THE API
+   What: Turn each signature into real Python code that the vision models can run.
+   How:  GPT writes code that uses built-in primitives (loc, vqa, depth,
+         same_object, etc.). Each method is tested on a dummy image.
+   Output: api.json (list of methods with code) + one folder per method in
+           results/.../api_generator/ with executable_program.py and result.json
+
+STEP 3: GENERATE PROGRAMS
+   What: For every question, write a short program that uses the API to
+         compute the answer (e.g. "find objects, get color of first one, return it").
+   How:  GPT gets the question + image and the API, and outputs a program.
+   Output: programs.json + HTML per question in results/.../program_generator/
+
+STEP 4: EXECUTE PROGRAMS
+   What: Run each program on the real image and record the answer.
+   How:  The Engine loads the image and the vision models (SAM2, Molmo, etc.).
+         For each question it runs the generated program; the program calls
+         the API methods, which call the models (segment, ask VQA, get depth, etc.).
+         The final answer is saved.
+   Output: results/.../program_execution/
+           - execution.json  (every question: predicted answer, ground truth)
+           - execution.csv   (same in table form)
+           - results.txt     (overall accuracy: e.g. Yes/No accuracy, count accuracy)
+           - one folder per question with trace.html, result.json, executable_program.py
+
+
+OUTPUTS SUMMARY (WHERE TO FIND THINGS)
+-------------------------------------
+Everything goes under:   results/<timestamp>/
+
+- signature_generator/   -> What methods we decided to have (signatures).
+- api_generator/        -> The actual Python code for each method + api.json.
+- program_generator/    -> One program per question + programs.json.
+- program_execution/   -> Predicted answers, ground truth, and accuracy (results.txt).
+
+
+HOW ACCURACY IS ACHIEVED
+-------------------------
+After execution, the script compares each predicted answer to the ground-truth
+answer in the annotations. It then writes:
+  - execution.csv: one row per question (question, ground truth, prediction).
+  - results.txt: summary like "Yes/No Accuracy: 0.85", "Numeric Accuracy: 0.72".
+
+So: inputs = questions + images + API key + models. Outputs = a custom API,
+programs that use it, and the answers + accuracy. The "how" is: GPT designs
+the API and programs; the Engine runs the programs using vision models on your
+GPU/CPU.
+
+
+--------------------------------------------------------------------------------
+EXAMPLE RUN (50 QUESTIONS, STUB MODE) - WHAT WE JUST DID
+--------------------------------------------------------------------------------
+
+COMMAND RUN
+-----------
+Full pipeline (signatures → API → programs → execution) for 50 questions,
+with --stub so Molmo is not loaded (avoids crash on some systems; locate
+uses image center instead of the real pointing model).
+
+  py -3.11 evaluate.py --dataset clevr ^
+    --annotations-json data/clevr_subset/annotations.json ^
+    --image-pth data/clevr_subset/images/ ^
+    --results-pth results/ --models-path models/ ^
+    --num-questions 50 --num-api-questions 10 --stub
+
+INPUTS USED
+-----------
+- annotations.json:  data/clevr_subset/annotations.json  (CLEVR questions)
+- images:            data/clevr_subset/images/
+- API key:           api.key
+- models path:       models/  (SAM2 used; Molmo skipped in stub mode)
+- num-questions:     50
+- num-api-questions: 10  (sample size for designing the API)
+
+OUTPUTS (WHERE THEY ARE)
+------------------------
+Run folder:   results/2026-02-08_19-33-54/
+
+- signature_generator/   Signatures from 10 sample questions.
+- api_generator/        api.json + 5 methods (_get_size, _get_color,
+                        _get_shape, _get_material, _count_objects).
+- program_generator/    50 programs (programs.json + one HTML per question).
+- program_execution/    Execution results (see below).
+
+KEY EXECUTION FILES
+-------------------
+- results/2026-02-08_19-33-54/program_execution/results.txt   <- summary metrics
+- results/2026-02-08_19-33-54/program_execution/execution.csv <- per-question answers
+- results/2026-02-08_19-33-54/program_execution/execution.json (same data, JSON)
+- results/2026-02-08_19-33-54/program_execution/image_*_question_*/  <- trace per question
+
+ACTUAL RESULTS (FROM results.txt)
+----------------------------------
+-------- Summary Results --------
+Yes/No Accuracy: 0.5454545454545454
+Multiple Choice Accuracy: 0.05555555555555555
+Numeric (count) Accuracy: 0.5
+Numeric (other) MRA: None
+
+EXECUTION.CSV (WHAT EACH COLUMN MEANS)
+--------------------------------------
+- question       : The question text from the dataset.
+- image_index    : Which image (e.g. 4881 = image 4881.png).
+- answer_type    : str (word/yes/no), int (count/number), etc.
+- ground_truth   : Correct answer from annotations.
+- prediction     : What LEGO Benchmark’s program returned (may be None, "not found", or a value).
+
+Sample rows:
+  What is the size of the thing that is the same color as the big cylinder? | 4881 | str | small   | None
+  Are there any objects that have the same color as the large matte block?   | 5586 | str | no      | no
+  What shape is the tiny purple object?                                      | 8515 | str | cube    | cube
+  What number of rubber objects are big purple cylinders or small gray things?| 5383| int| 2       | 1
+
+WHAT THE METRICS MEAN
+---------------------
+- Yes/No Accuracy:  Of questions with yes/no answers, fraction where
+  prediction matched ground truth. (Our run: ~54.5%.)
+- Multiple Choice Accuracy:  Same idea for multiple-choice style answers.
+  (Our run: ~5.6%.)
+- Numeric (count) Accuracy:  For count questions (e.g. "How many X?"),
+  fraction where the predicted number matched. (Our run: 50%.)
+- Numeric (other) MRA:  Mean Reciprocal Rank for other numeric answers;
+  None here means no such questions in this run.
+
+Why some predictions are wrong or "None":  In --stub mode, the "locate"
+step does not use Molmo; it returns the center of the image. So object
+pointing is wrong, which makes downstream answers (size, color, count) often
+wrong or missing. For real accuracy, run without --stub when Molmo loads
+successfully on your machine.
+
+================================================================================

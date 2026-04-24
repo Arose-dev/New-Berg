@@ -1,0 +1,1 @@
+/Users/waleed/CSE 199/LEGO Code/LEGO-Puzzles/./outputs/Fireworks_Qwen3-VL-30B/T20260322_G58d6fb3e/Fireworks_Qwen3-VL-30B_LEGOLite_openai_result.pkl

@@ -1,0 +1,33 @@
+================================================================================
+LEGO Benchmark - READY TO RUN CHECKLIST (verified)
+================================================================================
+
+[OK] Python 3.11
+[OK] PyTorch with CUDA (GPU detected)
+[OK] Dependencies: numpy, pandas, PIL, openai, transformers, engine/agents
+[OK] data/clevr_subset/annotations.json (1155 questions)
+[OK] data/clevr_subset/images/ (911 images)
+[OK] api.key (OpenAI key set)
+[OK] models/ + SAM2 checkpoint (sam2.1_hiera_base_plus.pt)
+[OK] Saved run for execution: results/2026-02-08_19-00-36/
+      - api_generator/api.json
+      - program_generator/programs.json
+
+--------------------------------------------------------------------------------
+RUN EXECUTION ONLY (no API/program generation)
+--------------------------------------------------------------------------------
+From project folder, run:
+
+  py -3.11 execute_only.py --dataset clevr --annotations-json data/clevr_subset/annotations.json --image-pth data/clevr_subset/images/ --results-pth results/2026-02-08_19-00-36 --api-json results/2026-02-08_19-00-36/api_generator/api.json --programs-json results/2026-02-08_19-00-36/program_generator/programs.json --num-questions 5
+
+Or use the script:  run_execution.ps1
+
+This loads the saved API and programs, then runs 5 questions through the Engine
+(SAM2, Molmo, etc.). When it completes, results appear in:
+  results/2026-02-08_19-00-36/program_execution/
+  - results.txt   (accuracy)
+  - execution.csv (per-question answers)
+
+NOTE: Execution has been crashing during Molmo load (exit 0xC0000005). If it
+crashes again: update NVIDIA driver, close other apps, or run Memory Diagnostic.
+================================================================================
