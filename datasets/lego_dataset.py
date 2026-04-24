@@ -155,10 +155,6 @@ def convert_lego_to_benchmark_questions(
             f"{LITE_CATEGORIES} -> {len(df)} rows"
         )
 
-    before = len(df)
-    df = df[df.apply(is_text_only_choice_question, axis=1)]
-    print(f"Filtered to text-only MCQ/TF questions: {before} -> {len(df)} rows")
-
     if max_questions > 0:
         df = df.head(max_questions)
         print(f"Limited to {len(df)} usable questions")
