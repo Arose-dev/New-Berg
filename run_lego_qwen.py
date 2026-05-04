@@ -149,7 +149,7 @@ class ExpertTracker:
             # Positive bias to steer routing toward target experts
             biased_logits = router_logits.clone()
             bias_experts = [36, 18, 88, 30, 108]
-            bias_value = 3.0
+            bias_value = 10.0
             for expert_id in bias_experts:
                 if expert_id < biased_logits.shape[-1]:
                     biased_logits[:, expert_id] += bias_value
