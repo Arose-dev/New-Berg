@@ -24,12 +24,28 @@ import argparse
 import csv
 import json
 import os
+import random
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import torch
+
+# ── Generation constants ───────────────────────────────────────────────────
+TEMPERATURE = 0.0
+DO_SAMPLE = False
+TOP_P = 1.0
+SEED = 42
+
+
+def set_seeds(seed: int = SEED):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 from PIL import Image
 from tqdm import tqdm
 from transformers import Qwen3VLMoeForConditionalGeneration, AutoProcessor
@@ -278,6 +294,8 @@ def main():
     )
     args = parser.parse_args()
 
+    set_seeds(SEED)
+
     # BENCHMARK_MODE env var acts as a default; CLI flags take precedence
     use_lite = not args.full
     if not args.full and not args.lite:
@@ -385,7 +403,9 @@ def main():
                 generated_ids = model.generate(
                     **inputs,
                     max_new_tokens=32,
-                    do_sample=False,
+                    do_sample=DO_SAMPLE,
+                    temperature=TEMPERATURE,
+                    top_p=TOP_P,
                 )
 
             expert_log = tracker.end_question()
