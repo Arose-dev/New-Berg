@@ -160,6 +160,9 @@ class ExpertTracker:
                 "topk_experts": topk_indices.cpu().tolist(),
                 "topk_scores": topk_vals.cpu().tolist(),
             })
+            # Return biased logits so the model actually uses them for routing
+            if isinstance(output, torch.Tensor):
+                return biased_logits
         return hook
 
     def begin_question(self, question_id: str, category: str):
